@@ -1,14 +1,19 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import path from "path"; 
+import path from "path";
+
 import authRoutes from "../routes/auth.routes.js";
 import productRoutes from "../routes/products.routes.js";
 import cartRoutes from "../routes/cart.routes.js";
 
 const app = express();
 
-const allowedOrigins = ["http://localhost:5173", "http://127.0.0.1:5173"];
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "https://frontend-six-tan-79.vercel.app/"
+];
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -23,16 +28,24 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
-
 app.use(cors(corsOptions));
-
 
 app.options("{*path}", cors(corsOptions));
 
 app.use(express.json());
 app.use(cookieParser());
 
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use(
+  "/uploads",
+  express.static(path.join(process.cwd(), "uploads"))
+);
+
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Backend server is running successfully!",
+  });
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
@@ -40,6 +53,7 @@ app.use("/api/cart", cartRoutes);
 
 app.use((err, req, res, next) => {
   console.error("Server Error:", err.message);
+
   res.status(err.status || 500).json({
     success: false,
     message: err.message || "Internal Server Error",
