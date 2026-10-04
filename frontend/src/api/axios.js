@@ -1,7 +1,7 @@
 import axios from "axios";
 
 const API = axios.create({
-  baseURL: "http://localhost:4000/api",
+  baseURL: "https://cohort3-0ass-4.onrender.com/api",
   withCredentials: true,
 });
 
@@ -23,7 +23,7 @@ API.interceptors.response.use(
 
       try {
         const res = await axios.get(
-          "http://localhost:4000/api/auth/refresh",
+          "https://cohort3-0ass-4.onrender.com/api/auth/refresh",
           { withCredentials: true }
         );
 
