@@ -1,4 +1,5 @@
 import Product from "../models/product.model.js";
+import { uploadFile } from "../services/storage.service.js";
 
 export const listAllProducts = async (req, res) => {
   try {
@@ -68,25 +69,16 @@ export const createProduct = async (req, res) => {
     let imageUrls = [];
 
     if (req.files && req.files.length > 0) {
-      imageUrls = req.files
-        .map((file) => {
-          const filePath = file.path || file.filename;
+      imageUrls = await Promise.all(
+        req.files.map(async (file) => {
+          const response = await uploadFile({
+            buffer: file.buffer,
+            fileName: file.originalname,
+          });
 
-          if (!filePath) {
-            return null;
-          }
-
-          const formattedPath = filePath.replace(/\\/g, "/");
-
-          if (formattedPath.includes("uploads")) {
-            return formattedPath.startsWith("/")
-              ? formattedPath
-              : `/${formattedPath}`;
-          }
-
-          return `/uploads/${file.filename}`;
+          return response.url;
         })
-        .filter(Boolean);
+      );
     }
 
     if (imageUrls.length === 0 && req.body.images) {
@@ -118,6 +110,8 @@ export const createProduct = async (req, res) => {
       data: populatedProduct,
     });
   } catch (error) {
+    console.error("Create Product Error:", error);
+
     res.status(400).json({
       success: false,
       message: error.message,
