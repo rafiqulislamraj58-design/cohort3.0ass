@@ -5,23 +5,29 @@ export const listAllProducts = async (req, res) => {
     const products = await Product.find({
       $or: [
         { isListed: true },
-        { isListed: { $exists: false } }
-      ]
-    }).populate("seller", "name email");
+        { isListed: { $exists: false } },
+      ],
+    })
+      .populate("seller", "name email")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
+      count: products.length,
       data: products,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
 export const listAllProductsToSeller = async (req, res) => {
   try {
-    const sellerId = req.user?.userId || req.user?._id || req.user?.id;
-    
+    const sellerId = req.user?.userId;
+
     if (!sellerId) {
       return res.status(401).json({
         success: false,
@@ -29,22 +35,29 @@ export const listAllProductsToSeller = async (req, res) => {
       });
     }
 
-    const products = await Product.find({ seller: sellerId });
-    
+    const products = await Product.find({
+      seller: sellerId,
+    })
+      .populate("seller", "name email")
+      .sort({ createdAt: -1 });
+
     res.status(200).json({
       success: true,
       count: products.length,
       data: products,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
 export const createProduct = async (req, res) => {
   try {
-    const sellerId = req.user?.userId || req.user?._id || req.user?.id;
-    
+    const sellerId = req.user?.userId;
+
     if (!sellerId) {
       return res.status(401).json({
         success: false,
@@ -53,46 +66,61 @@ export const createProduct = async (req, res) => {
     }
 
     let imageUrls = [];
+
     if (req.files && req.files.length > 0) {
-      imageUrls = req.files.map((file) => {
-        const filePath = file.path || file.filename;
-        if (filePath) {
-          const formattedPath = filePath.replace(/\\/g, "/");
-          if (formattedPath.includes("uploads")) {
-            return formattedPath.startsWith("/") ? formattedPath : `/${formattedPath}`;
+      imageUrls = req.files
+        .map((file) => {
+          const filePath = file.path || file.filename;
+
+          if (!filePath) {
+            return null;
           }
-          return `/uploads/${file.filename || formattedPath.split('/').pop()}`;
-        }
-        return null;
-      }).filter(Boolean);
+
+          const formattedPath = filePath.replace(/\\/g, "/");
+
+          if (formattedPath.includes("uploads")) {
+            return formattedPath.startsWith("/")
+              ? formattedPath
+              : `/${formattedPath}`;
+          }
+
+          return `/uploads/${file.filename}`;
+        })
+        .filter(Boolean);
     }
 
     if (imageUrls.length === 0 && req.body.images) {
       if (Array.isArray(req.body.images)) {
         imageUrls = req.body.images;
-      } else if (typeof req.body.images === 'string') {
+      } else if (typeof req.body.images === "string") {
         imageUrls = [req.body.images];
       }
     }
 
     const productData = {
-      ...req.body,
+      title: req.body.title,
+      description: req.body.description,
+      price: req.body.price,
+      sizes: req.body.sizes,
+      images: imageUrls,
       seller: sellerId,
-      images: imageUrls, 
-      isListed: true
+      isListed: true,
     };
 
     const newProduct = await Product.create(productData);
 
+    const populatedProduct = await Product.findById(newProduct._id)
+      .populate("seller", "name email");
+
     res.status(201).json({
       success: true,
       message: "Product created successfully",
-      data: newProduct,
+      data: populatedProduct,
     });
   } catch (error) {
-    res.status(400).json({ 
-      success: false, 
-      message: error.message 
+    res.status(400).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -100,55 +128,79 @@ export const createProduct = async (req, res) => {
 export const unlistProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    
-    const product = await Product.findById(id);
-    if (!product) {
-      return res.status(404).json({
+    const sellerId = req.user?.userId;
+
+    if (!sellerId) {
+      return res.status(401).json({
         success: false,
-        message: "Product not found",
+        message: "Unauthorized",
       });
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
-      { isListed: false },
-      { new: true }
-    );
+    const product = await Product.findOne({
+      _id: id,
+      seller: sellerId,
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found or you are not the owner",
+      });
+    }
+
+    product.isListed = false;
+    await product.save();
 
     res.status(200).json({
       success: true,
       message: "Product unlisted successfully",
-      data: updatedProduct,
+      data: product,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
 export const listProduct = async (req, res) => {
   try {
     const { id } = req.params;
+    const sellerId = req.user?.userId;
 
-    const product = await Product.findById(id);
-    if (!product) {
-      return res.status(404).json({
+    if (!sellerId) {
+      return res.status(401).json({
         success: false,
-        message: "Product not found",
+        message: "Unauthorized",
       });
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
-      { isListed: true },
-      { new: true }
-    );
+    const product = await Product.findOne({
+      _id: id,
+      seller: sellerId,
+    });
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found or you are not the owner",
+      });
+    }
+
+    product.isListed = true;
+    await product.save();
 
     res.status(200).json({
       success: true,
       message: "Product listed successfully",
-      data: updatedProduct,
+      data: product,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
